@@ -1,0 +1,712 @@
+---
+title: "ARA"
+output: 
+  flexdashboard::flex_dashboard:
+    css: styles.css
+    #theme: sandstone
+    orientation: columns
+    vertical_layout: fill
+    source_code: embed
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(shiny)
+library(shinyWidgets)
+library(DT)
+library(visreg)
+library(ggplot2)
+library(ggpubr)
+library(gridExtra)
+library(here)
+library(eurostat)
+library(sf)
+library(leaflet)
+library(tigris)
+library(sparkline)
+library(stats)
+library(jtools)
+library(psych)
+library(magrittr)
+library(gganimate)
+library(gifski)
+
+options(scipen=999)
+```
+
+```{r global, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+# laden data
+db_koppel <- readRDS("./toolkitschoon.rds") 
+
+# Deze bovenaan
+accidents_geo <- readRDS("./accidents_geo.rds") 
+leavers_geo   <- readRDS("./leavers_geo.rds")
+
+# NAs aanpassen
+db_koppel %<>%  
+  mutate_if(is.numeric, funs(replace_na(.,0))) %>% 
+  mutate_if(is.logical, funs(replace_na(.,"Onbekend"))) %>% 
+  mutate_if(is.character, funs(replace_na(.,"Onbekend"))) %>% 
+  mutate_if(is.numeric, funs(replace(., is.infinite(.), 0)))
+
+# genereren hoofdstukken voor selectie
+hoofdstuk <- db_koppel %>%
+  filter(!is.na(hoofdstuk) &
+           jaar ==2018 &
+           hoofdstuk_uniek != "XVIII Wonen en Rijksdienst") %>% 
+  arrange(hoofdstuk_uniek) %>% 
+  pull(hoofdstuk_uniek) %>% 
+  unique()
+
+# dataframe variabelen
+# features <- tibble(FT_name = db_koppel %>% colnames(),
+#                    soort = c(rep("A",41), rep("B", 16), rep("C", 18), rep("D", 18))) %>% 
+#   filter(str_detect(FT_name, "FT"))
+
+features <- read.csv2("./features2.csv",
+                      stringsAsFactors = FALSE) %>% 
+   rename(FT_name = cols) %>% 
+    # Remove unnused buttons for final dashboard
+  filter(!str_detect(FT_name, "materiality|handmatigeboekingen"))
+
+
+# selecteer training data
+# rubriek B staat voor uitgaven
+db_koppel_train <-
+  db_koppel %>%
+  filter(rubriek %in% "BC",
+         jaar != 2018)
+
+# selecteer test data (2018)
+db_koppel_test <-
+  db_koppel %>%
+  filter(rubriek %in% "BC",
+         jaar == 2018)
+
+# Afhankelijke variabelen
+dv_tot <- "totaal_f_o_rm"
+
+## dv_toler <- "totaal_tol"
+
+# Voorspellers
+
+ivs <- colnames(db_koppel)[grepl("^FT",colnames(db_koppel))]
+
+# Total model
+## Continu
+model_lm_tot <-  lm(as.formula(paste(dv_tot, "~",
+                                     paste(ivs, collapse = "+"))),
+                    data = db_koppel)
+
+# Default model
+model_lm_default <- step(model_lm_tot,
+                         direction = "backward",
+                         trace = 0)
+
+ivs_user <- colnames(db_koppel)[grepl("^FT",colnames(db_koppel))]
+
+# User model
+model_lm_user <-  lm(as.formula(paste(dv_tot, "~",
+                                      paste(ivs_user, collapse = "+"))),
+                     data = db_koppel)
+
+models <- list(fit1 = model_lm_default,
+               fit2 = model_lm_user)
+
+purrr::map_df(models,
+              ~ broom::glance(.)$adj.r.squared,
+              .id = "model")
+
+db_koppel_test %<>%
+  mutate(totaal_f_o_voorsp = predict(model_lm_user,
+                                     newdata = db_koppel_test,
+                                     type = "response"),
+         totaal_f_o_voorsp_abs = totaal_f_o_voorsp %>% abs(),
+         totaal_f_o_delta = totaal_f_o_rm - totaal_f_o_voorsp)
+
+model_lm_def_tidy <- model_lm_default %>% 
+  broom::tidy(conf.int = TRUE) %>%
+  mutate(estimate = estimate %>% abs(),
+         conf.low = conf.low %>% abs(),
+         conf.high = conf.high %>% abs()) %>% 
+  filter(term != "(Intercept)")
+```
+
+
+```{r materiality summary, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+
+#read data
+dsm <- db_koppel_test #output van model
+ds <- readRDS("./toolkitschoon.rds") 
+
+ds2 <- ds %>% filter(jaar==2018) %>% select ("jaar", "hoofdstuk_nr", "artikel_nr","hoofdstuk","hoofdstuk_uniek","artikel","FT_materiality_BC_art")
+dsm <- dsm  %>% filter(jaar==2018) %>%  select ("totaal_f_o_voorsp","jaar", "hoofdstuk_nr", "artikel_nr","hoofdstuk","hoofdstuk_uniek","artikel","totaal_f_o_voorsp")
+
+dsm2 <- left_join(ds2, dsm)
+
+dsm3<- dsm2 %>%  mutate(totaal_f_o_voorsp_no_neg= if_else(totaal_f_o_voorsp<0,0,totaal_f_o_voorsp), art_label=paste(hoofdstuk_nr, artikel, sep = "_"), pred_overschrijding=totaal_f_o_voorsp>FT_materiality_BC_art) %>% 
+  group_by(jaar,hoofdstuk_nr) %>% 
+  mutate(f_o_per_chapter_art_based=sum(totaal_f_o_voorsp_no_neg, na.rm = TRUE)) %>% 
+  arrange(-f_o_per_chapter_art_based)
+
+# voorspelde f_o
+table1 <- dsm3  %>% filter(pred_overschrijding==TRUE) %>% add_tally()
+# table1 <- dsm  %>% add_tally()
+table2 <- table1 %>% select(hoofdstuk_nr, hoofdstuk, hoofdstuk_uniek, f_o_per_chapter_art_based,jaar,n) %>% unique() %>% 
+  rename(n_art_overschrijding=n)
+
+
+table3 <- ds %>%  select(hoofdstuk_nr, hoofdstuk, hoofdstuk_uniek, artikel_nr, artikel,jaar,FT_materiality_BC_art) %>% filter(jaar==2018) %>%
+  unique() %>% arrange(hoofdstuk_nr,artikel_nr)
+
+unique(table3$hoofdstuk_nr)
+
+table4 <- table3 %>% group_by(hoofdstuk_nr) %>% add_tally()
+
+hfst_pred_prep_m1<- left_join(table4,table2)
+hfst_pred_prep_m1[is.na(hfst_pred_prep_m1)] <- 0
+hfst_pred_prep_m1 <- hfst_pred_prep_m1 %>% rename(n_artikels=n) %>% mutate(pct_art_hfst=round((100*n_art_overschrijding/n_artikels),2))
+
+hfst_pred_m1 <- hfst_pred_prep_m1%>%select(hoofdstuk_nr, hoofdstuk, hoofdstuk_uniek,jaar,f_o_per_chapter_art_based, n_art_overschrijding,n_artikels,pct_art_hfst) %>%
+  group_by(hoofdstuk_nr) %>% unique() %>% arrange(-pct_art_hfst)
+
+Pred_hfst_m1.rds <- hfst_pred_prep_m1
+
+db_pred <- Pred_hfst_m1.rds %>% select(hoofdstuk_uniek,n_artikels,n_art_overschrijding,pct_art_hfst,f_o_per_chapter_art_based) %>% mutate(f_o_per_chapter_art_based=round(f_o_per_chapter_art_based,0)) %>% unique()
+
+
+# saveRDS(hfst_pred_m1,"0_data/Pred_hfst_m1.rds")
+
+```
+
+
+
+
+Home
+===================================== 
+
+Column {.sidebar data-width=400}
+--------------------------------------------------
+
+```{r}
+renderImage({ 
+    filename <- normalizePath(file.path("./ara_logo.png"))
+    list(src = filename,
+         height = 400, 
+         contentType = 'image/png',
+         alt = "This is alternate text")
+  }, deleteFile = FALSE)
+```
+
+**Translate ever-increasing amount of data into actionable audit intelligence to maximize insight and gain audit quality.** \
+
+As data evolves it requires open, flexible and customized visual intelligence to assess risk. With our flexible dashboard interface you spend less time waiting and utilize more time to analyze risk. \
+
+We quantify the risk off material misstatements. We provide intelligent analytics by using 
+multiple financial and non-financial datasources, statistical modelling and many advanced techniques.
+
+
+Row 
+--------------------------------------------------
+
+```{r}
+data <- db_koppel
+
+test <- data %>%
+  group_by(hoofdstuk, artikel, jaar, tolerantieoverschreden_f_o_rm) %>%
+  summarize(aantal_fte = sum(FT_aantal_fte), 
+            totaal_fout = sum(totaal_f_o_rm)) %>%
+  filter(!is.na(aantal_fte) & !is.na(totaal_fout) & !is.na(tolerantieoverschreden_f_o_rm))
+
+p <- ggplot(test, aes(x = aantal_fte, y = totaal_fout, 
+                      color = tolerantieoverschreden_f_o_rm)) +
+  geom_point(aes(size = totaal_fout)) +
+  theme_bw() +
+  scale_color_viridis_d() +
+  scale_y_continuous(trans = "log10", 
+                     labels = function(x) format(x, big.mark = ".",
+                                                       scientific = FALSE)) + 
+  theme(panel.background = element_blank(), 
+    legend.position = "none", 
+  axis.line = element_line(colour = "black"))
+
+anim <- p +   
+  transition_states(jaar, transition_length = 1, state_length = 1) +
+ labs(title = 'Budget vs FTE per year: {closest_state}',
+     x = 'Total FTE', 
+     y = 'Total Budget') 
+  
+animate(anim)
+```
+
+Row 
+--------------------------------------------------
+
+### Total Expenditure
+
+```{r}
+articles = prettyNum(348971785, big.mark = ".")
+valueBox(articles, icon = "fa-money-bill-wave", color = "#287D8EFF")
+
+```
+
+### Comments per Day
+
+```{r}
+comments = 189
+valueBox(comments, icon = "fa-comments", color = "#287D8EFF")
+```
+
+
+### Articles per Day
+
+```{r}
+articles = prettyNum(1492, big.mark = ".")
+valueBox(articles, icon = "fa-pencil",  color = "#287D8EFF")
+```
+
+
+
+Budget Chapters 2018 
+===================================== 
+
+```{r}
+
+tmp1 <- db_koppel %>%
+  filter(jaar == 2018) %>% 
+  group_by(hoofdstuk_uniek) %>% 
+  summarise(sum_begroting = sum(begrootbedrag)) %>% 
+  arrange(hoofdstuk_uniek)
+
+tmp2 <- db_koppel %>%
+  group_by(jaar, hoofdstuk_uniek) %>% 
+  summarise(sum_begroting = sum(begrootbedrag))%>% 
+  group_by(hoofdstuk_uniek) %>% 
+  summarize(
+    TrendSparkline = spk_chr(
+      sum_begroting, type ="line",
+      chartRangeMin = 2015, chartRangeMax = max(jaar)
+    )
+  ) 
+
+tmp1 %>% left_join(tmp2, by = "hoofdstuk_uniek") %>% left_join(db_pred, by = "hoofdstuk_uniek") %>% select(-hoofdstuk_nr) %>% 
+  datatable(rownames = FALSE,
+            extensions = list("Buttons" = NULL, "Scroller" = NULL),
+            colnames = c('Budget chapter',  'Expenditure', 'Trend','Articles','Overrun','%','Pred. E&U'),
+            escape = FALSE,
+            options = list(paging = TRUE,
+                           scroller=TRUE,
+                           dom = 'BfrtP',
+                           # autoWidth = TRUE,
+                           # buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+                           
+                           buttons = 
+                             list(
+                                  list(extend = "copy", text = '<span class="fa fa-files-o"></span>'), 
+                                  list(extend = "excel", text = '<span class="fa fa-file-excel-o"></span>'), 
+                                  list(extend = "csv", text = '<span class="fa fa-file-text-o"></span>'),
+                                  list(extend = "pdf", text = '<span class="far fa-file-pdf"></span>'), 
+                                  list(extend = "print", text = '<span class="fas fa-print"></span>')
+                              ),
+                           
+                           pagelength = 30,
+                           lengthMenu = list(c(30, -1), c("30", "All")),
+                           fnDrawCallback = htmlwidgets::JS(
+                             '
+function(){
+  HTMLWidgets.staticRender();
+}
+'
+                           )
+            )) %>%
+  spk_add_deps() %>% 
+  formatCurrency(2, '\U20AC', mark = ".", digits = 0) %>% 
+  formatCurrency(7, '\U20AC', mark = ".", digits = 0) 
+
+# tmp1 %>% left_join(tmp2, by = "hoofdstuk_uniek") %>% 
+#   datatable(rownames = FALSE,
+#             extensions = list("Buttons" = NULL, "Scroller" = NULL),
+#             colnames = c('Budget chapter', 'Expenditure', 'Trend'),
+#             escape = FALSE,
+#             options = list(paging = TRUE,
+#                            scroller=TRUE,
+#                            dom = 'BfrtP',
+#                            # autoWidth = TRUE,
+#                            buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+#                            pagelength = 30,
+#                            lengthMenu = list(c(30, -1), c("30", "All")),
+#                            fnDrawCallback = htmlwidgets::JS(
+#                              '
+# function(){
+#   HTMLWidgets.staticRender();
+# }
+# '
+#                            )
+#             )) %>%
+#   spk_add_deps() %>% 
+#   formatCurrency(2, '\U20AC', mark = ".", digits = 0)
+
+# %>% 
+#     datatable(rownames = FALSE,
+#               extensions = "Buttons",
+#               colnames = c('db_koppel chapter', 'Expenditure'),
+#               options = list(dom = 'Bfrt',
+#                              buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+#                              pagelength = 30,
+#                              lengthMenu = list(c(30, -1), c("30", "All")))) %>% 
+#     formatCurrency(2, '\U20AC', mark = ".", digits = 0)
+
+```
+
+
+Per Budget chapter {.storyboard}
+===================================== 
+
+Inputs {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+<br>
+
+**Chapter selection**
+```{r}
+
+selectInput(inputId = "hoofdstuk",
+            label = "",
+            choices = hoofdstuk,
+            selected = "VIII Onderwijs, Cultuur en Wetenschap")
+```
+
+
+**Feature selection**
+
+```{r}
+
+div(
+  selectInput(inputId = "Financial",
+              label = "Financial",
+              choices = features %>%
+                filter(FT_category == "Financial") %>%
+                pull(FT_name),
+              multiple = TRUE),
+  
+  selectInput(inputId = "Non_financial",
+              label = "Non-Financial",
+              choices = features %>%
+                filter(FT_category == "Non-financial") %>%
+                pull(FT_name),
+              multiple = TRUE,
+              selected = "FT_IT_projecten"),
+  
+  selectInput(inputId = "Political",
+              label = "Political",
+              choices = features %>%
+                filter(FT_category == "Political") %>%
+                pull(FT_name),
+              multiple = TRUE),
+  
+  selectInput(inputId = "Employees",
+              label = "Employees",
+              choices = features %>%
+                filter(FT_category == "Empolyees") %>%
+                pull(FT_name),
+              multiple = TRUE),
+  uiOutput("sliders"),
+  actionButton("go", "Go!"),
+)
+
+ivs_sel_plot <- eventReactive(input$go,
+                              ignoreNULL = FALSE,
+                              {model_lm_user_sel <- lm(as.formula(paste(dv_tot, "~",
+                                                                        paste(c(input$Financial,
+                                                                                input$Non_financial,
+                                                                                input$Political,
+                                                                                input$Employees),
+                                                                              collapse = "+"))),
+                                                       data = db_koppel)
+                              models_sel <- list(fit1 = model_lm_default,
+                                                 fit2 = model_lm_user_sel)
+                              
+                              purrr::map_df(models_sel,
+                                            ~ broom::glance(.)$adj.r.squared,
+                                            .id = "model")
+                              
+                              db_koppel_test %<>%
+                                mutate(totaal_f_o_voorsp = predict(model_lm_user_sel,
+                                                                   newdata = db_koppel_test,
+                                                                   type = "response"),
+                                       totaal_f_o_voorsp_abs = totaal_f_o_voorsp %>% abs(),
+                                       totaal_f_o_delta = totaal_f_o_rm - totaal_f_o_voorsp)
+                              
+                              db_koppel_test %>%
+                                filter(hoofdstuk_uniek == input$hoofdstuk) %>% 
+                                arrange(totaal_f_o_voorsp %>%
+                                          abs() %>% 
+                                          desc()) %>%
+                                mutate(Arikel_un = paste(artikel_nr, artikel, sep = "_"),
+                                       delta_vsp_mat = totaal_f_o_voorsp_abs - FT_materiality_BC_art) %>% 
+                                select("Artikel" = Arikel_un,
+                                       "Voorspelling" = totaal_f_o_voorsp_abs,
+                                       FT_materiality_BC_art,
+                                       delta_vsp_mat) %>% 
+                                arrange(delta_vsp_mat %>% desc()) %>% 
+                                head(25) %>% 
+                                ggplot(aes(x = fct_reorder(Artikel, delta_vsp_mat),
+                                           y = Voorspelling)) +
+                                geom_point(aes(color="blue"), 
+                                           size= 4,
+                                           shape = 18) +
+                                geom_point(aes(y = FT_materiality_BC_art,
+                                               color = "red"),
+                                           size = 6,
+                                           shape = 124) +
+                                coord_flip() +
+                                theme_light() +
+                                theme(axis.text=element_text(size=12),
+                                      axis.title=element_text(size=14,face="bold")) +
+                                scale_x_discrete(labels = function(x) str_wrap(x, width = 35)) +
+                                scale_y_continuous(labels=function(x) format(x, big.mark = ".", scientific = FALSE)) +
+                                scale_color_identity(name = "",
+                                                     breaks = c("blue", "red"),
+                                                     labels = c("Predicted", "Tolerance"),
+                                                     guide = "legend") +
+                                labs(x = "",
+                                     y = "Predicted Error and Uncertainty")
+                              
+                              })
+
+```
+
+
+### **Budget articles**
+
+```{r}
+
+renderDT({
+  
+  b_artikel <- db_koppel %>%
+    filter(hoofdstuk_uniek == input$hoofdstuk &
+             jaar == 2018 & artikel_nr > 0) %>%
+    group_by(artikel_nr, artikel, subrubriek_oms) %>% 
+    summarise(sum_begroting = sum(begrootbedrag)) %>% 
+    arrange(artikel_nr) 
+  
+  # b_artikel %>%
+  #   datatable(rownames = FALSE,
+  #             extensions = "Buttons",
+  #             colnames = c('#', 'Budget article', 'Policy article', 'Expenditure'),
+  #             options = list(dom = 'Bfrt',
+  #                            paging = FALSE,
+  #                            autoWidth = TRUE,
+  #                            buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  #             )) %>% 
+  #   formatCurrency(4, '\U20AC', mark = ".", digits = 0)
+  
+    b_artikel %>%
+    datatable(rownames = FALSE,
+              extensions = "Buttons",
+              colnames = c('#', 'Budget article', 'Policy article', 'Expenditure'),
+              options = list(dom = 'Bfrt',
+                             paging = FALSE,
+                             autoWidth = TRUE,
+                              # buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                          buttons =
+                             list(
+                                  list(extend = "copy", text = '<span class="fa fa-files-o"></span>'),
+                                  list(extend = "csv", text = '<span class="fa fa-file-text-o"></span>'),
+                                  list(extend = "excel", text = '<span class="fa fa-file-excel-o"></span>'),
+                                  list(extend = "pdf", text = '<span class="far fa-file-pdf"></span>'),
+                                  list(extend = "print", text = '<span class="fas fa-print"></span>')
+                          )
+
+              ),
+              caption = htmltools::tags$caption(
+    style = 'caption-side: top; text-align: center;',
+    'Hoofdstuk ', input$hoofdstuk)) %>% 
+    formatCurrency(4, '\U20AC', mark = ".", digits = 0) 
+  
+})
+
+```
+
+
+
+### **European comparison**
+
+
+```{r}
+
+renderLeaflet({
+
+  # Plotten van het kaartje
+
+  if (input$hoofdstuk == "XII Infrastructuur en Waterstaat") {
+    
+    pal <- colorBin(palette = "YlOrRd", 
+                    domain = accidents_geo$rate,
+                    bins=c(0,2,4,6,8,10))
+    
+    
+    
+    # Pop-up als je langs de landen gaat
+    popups <- str_c(accidents_geo$NUTS_ID,"<br>Rate: ",
+                    round(accidents_geo$rate,1)," per 100,000")
+    
+    
+    accidents_geo %>%
+      st_transform(crs = "+init=epsg:4326") %>%
+      leaflet() %>%
+      setView(lng=9.6,lat=53.6,zoom=3) %>%
+      addProviderTiles(provider = "CartoDB.Positron") %>%
+      addPolygons(
+        popup = popups,
+        weight=1,
+        smoothFactor = 0,
+        fillOpacity = 0.3,
+        color = ~ pal(rate)) %>%
+      
+      #addControl(html = html_copyright, position = "bottomleft") %>%
+      addLegend("bottomleft",
+                pal = pal,
+                values = ~ rate,
+                title = "Road Accidents 2017<br>Deaths per 100,000 popn",
+                opacity = 0.3)
+  }else if (input$hoofdstuk == "VIII Onderwijs, Cultuur en Wetenschap") {  
+  
+    # Kleuren kiezen voor het kaartje
+    pal <- colorBin(palette = "YlOrRd", 
+                  domain = leavers_geo$rate,
+                  bins=c(0, 2,7,12,17,22,27))
+  
+  # Pop-up als je langs de landen gaat
+  popups <- str_c(leavers_geo$NUTS_ID,"<br>Percentage: ",
+                  round(leavers_geo$values,1)," of population")
+  
+  # Plotten van het kaartje
+  leavers_geo %>%
+    st_transform(crs = "+init=epsg:4326") %>%
+    leaflet() %>%
+    setView(lng=9.6,lat=53.6,zoom=3) %>% 
+    addProviderTiles(provider = "CartoDB.Positron") %>%
+    addPolygons(
+      popup = popups, 
+      weight=1,
+      smoothFactor = 0,
+      fillOpacity = 0.3,
+      color = ~ pal(rate)) %>%
+    #addControl(html = html_copyright, position = "bottomleft") %>% 
+    addLegend("bottomleft", 
+              pal = pal, 
+              values = ~ values,
+              title = "Early leavers 2019<br> percentage of pop",
+              opacity = 0.3) 
+    
+     } 
+  })
+
+
+```
+
+
+### **Risk analysis: Predicted Error and Uncertainty (All)**
+
+```{r}
+
+renderPlot({
+  
+  db_koppel_test %>%
+    filter(hoofdstuk_uniek == input$hoofdstuk) %>% 
+  arrange(totaal_f_o_voorsp %>%
+            abs() %>% 
+            desc()) %>%
+  mutate(Arikel_un = paste(artikel_nr, artikel, sep = "_"),
+         delta_vsp_mat = totaal_f_o_voorsp_abs - FT_materiality_BC_art) %>% 
+  select("Artikel" = Arikel_un,
+         "Voorspelling" = totaal_f_o_voorsp_abs,
+         FT_materiality_BC_art,
+         delta_vsp_mat) %>% 
+  arrange(delta_vsp_mat %>% desc()) %>% 
+  head(25) %>% 
+ ggplot(aes(x = fct_reorder(Artikel, delta_vsp_mat),
+           y = Voorspelling)) +
+  geom_point(aes(color="blue"), 
+             size= 4,
+             shape = 18) +
+  geom_point(aes(y = FT_materiality_BC_art,
+             color = "red"),
+             size = 6,
+             shape = 124) +
+  coord_flip() +
+    theme_bw() +
+    theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=14,face="bold")) +
+    scale_y_continuous(labels=function(x) format(x, big.mark = ".", scientific = FALSE)) +
+    scale_x_discrete(labels = function(x) str_wrap(x, width = 35)) +
+    scale_color_identity(name = "",
+                         breaks = c("blue", "red"),
+                         labels = c("Predicted", "Tolerance"),
+                         guide = "legend") +
+    labs(x = "",
+         y = "Predicted Error and Uncertainty")
+  
+})
+
+```
+
+
+### **Risk analysis: Predicted Error and Uncertainty (with selected features)**
+
+```{r}
+
+renderPlot({
+  
+  ivs_sel_plot()
+  
+})
+
+
+
+```
+
+### **Risk analysis: Feature contribution**
+
+```{r}
+renderPlot({
+  ggplot(model_lm_def_tidy,
+               aes(x = fct_reorder(term, estimate),
+                   y = estimate)) +
+    geom_segment( aes(x = fct_reorder(term, estimate), 
+                      xend = fct_reorder(term, estimate), 
+                      y = 0, 
+                      yend = estimate),
+                  color="gray") +
+    geom_point(color="blue", size=4, alpha = .6) +
+    coord_flip() +
+    theme_light() 
+})
+```
+
+### **Risk analysis: Model Performance**
+
+```{r}
+
+renderPlot({
+  
+  # Plot gemiddelde delta
+  
+  db_koppel_test %>%
+    ggplot(aes(x = totaal_f_o_delta)) +
+    geom_density(aes(y = ..count..), fill = "lightgray") +
+    geom_vline(data = db_koppel_test,
+               aes(xintercept=mean(totaal_f_o_delta, na.rm=TRUE)),
+               color="red", linetype="dashed", size=1) +
+    geom_vline(xintercept = 0, color="blue", linetype="dashed", size=1) +
+    theme_minimal() +
+    theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=14,face="bold")) +
+    scale_x_continuous(labels=function(x) format(x, big.mark = ".", scientific = FALSE)) +
+    labs(x = "Difference predicted and actual errors E&Us",
+         y = "")
+})
+```

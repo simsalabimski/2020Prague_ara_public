@@ -1,0 +1,98 @@
+;cols;soort;FT_name_useable;FT_category;No_FT
+1;key_art;;;;
+2;hoofdstuk_nr;;;;
+3;hoofdstuk;;;;
+4;hoofdstuk_afk;;;;
+5;jaar;;;;
+6;fonds;;;;
+7;artikel;;;;
+8;artikel_nr;;;;
+9;rubriek;;;;
+10;subrubriek_oms;;;;
+11;begrootbedrag;;;;
+12;stand2esuppletie;;;;
+13;verantwoordbedrag;;;;
+14;totaal_f_o_rm;;;;
+15;tolerantieoverschreden_f_o_rm;;;;
+16;hoofdstuk_uniek;;;;
+17;FT_aantal_ovk;A;Number of deficiencies;Non-financial;
+18;FT_WNT_bezoldiging;A;Number of Renumeration act overruns;Non-financial;
+19;FT_aantal_WOB;A;Number of Public Acces Act requests;Non-financial;
+20;FT_IT_projecten;A;Number of IT project;Non-financial;
+21;FT_aantal_overschrijding_ICT;B;Number of IT projects budget overruns;Non-financial;
+22;FT_aantal_fte;B;Number of FTE;Empolyees;
+23;FT_pensioenleeftijd;B;Retirement age;Empolyees;
+24;FT_aantal_mannen;B;Number of males;Empolyees;
+25;FT_aantal_instroom;B;Staff inflow;Empolyees;
+26;FT_aantal_instroom_jong;B;Staf inflow youth;Empolyees;
+27;FT_aantal_uitstroom;B;Staff outflow;Empolyees;
+28;FT_aantal_instroom_duur;B;Staff inflow (top management);Empolyees;
+29;FT_aantal_uitstroom_duur;B;Staff outflow (top management);Empolyees;
+30;FT_aantal_fte_duur;B;Number of FTE (top management);Empolyees;
+31;FT_aantal_beleid;B;Number of FTE (policy makers);Empolyees;
+32;FT_aantal_ondersteuning;B;Number of FTE (staff);Empolyees;
+33;FT_aantal_uitvoering;B;Number of FTE (execution);Empolyees;
+34;FT_aantal_inspectie;B;Number of FTE (inspection);Empolyees;
+35;FT_percentage_mannen;B;Percentage males;Empolyees;
+36;FT_percentage_jonginstroom_uitstroom;B;Percentage FTE infow/outlfow (young);Empolyees;
+37;FT_percentage_doorstroom_duur;B;Percentage FTE infow/outlfow (top management);Empolyees;
+38;FT_percentage_uitvoering;B;Percentage FTE (execution);Empolyees;
+39;FT_percentage_beleid;B;Percentage FTE (policy);Empolyees;
+40;FT_percentage_ondersteuning;B;Percentage FTE (staff);Empolyees;
+41;FT_staffel_hfst_value;B;Budget total (chapter) ;Financial;No FT
+42;FT_materiality_BC_hfst;B;Materiality (chapter);Financial;No FT
+43;FT_staffel_hfst_cat;B;Materiality size category (chapter);Financial;No FT
+44;FT_overschrijding_materiality_BC_hfst;B;Materiality overrun (chapter);Financial;No FT
+45;FT_materiality_BC_art;B;Materiality (article);Financial;No FT
+46;FT_materiality_BC_art_staffel_cat;B;Materiality size category (article);Financial;No FT
+47;FT_overschrijding_materiality_BC_art;B;Materiality overrun (article);Financial;No FT
+48;FT_aantal_ontvangers;B;Number of subsidy recipients;Non-financial;
+49;FT_totaal_ontvangers;B;Amount of subsidy recipients;Non-financial;
+50;FT_aantal_verlagingen;B;Number of amendments - decrease;Political;
+51;FT_aantal_verhogingen;B;Number of amendments - increase;Political;
+52;FT_totaal_amendement;B;Number of amendments;Political;
+53;FT_aantal_handmatigeboekingen;B;Number of manual journal entries;Non-financial;
+54;FT_slotwet;B;Budget closing act movements;Non-financial;
+55;FT_app_vs_programma;B;Overhead expenses vs policy expenses;Non-financial;
+56;key_hfst;;;;
+57;staffel_hfst_value;B;Budget total (chapter) - 2;Financial;No FT
+58;totaal_f_o_rm_per_hfst;;;;
+59;FT_aantal_ovk_delta;B;Change number of deficiencies;Non-financial;
+60;FT_WNT_bezoldiging_delta;B;Change number of Renumeration act overruns;Empolyees;
+61;FT_aantal_WOB_delta;B;Change number of Public Acces Act requests;Non-financial;
+62;FT_IT_projecten_delta;B;Change number of IT projects ;Non-financial;
+63;FT_aantal_overschrijding_ICT_delta;B;Change number of IT projects ;Non-financial;
+64;FT_aantal_fte_delta;B;Change number of FTE;Empolyees;
+65;FT_pensioenleeftijd_delta;B;Change retirement age;Empolyees;
+66;FT_aantal_mannen_delta;B;Change number of males;Empolyees;
+67;FT_aantal_instroom_delta;B;Change staff inflow;Empolyees;
+68;FT_aantal_instroom_jong_delta;B;Change staf inflow youth;Empolyees;
+69;FT_aantal_uitstroom_delta;B;Change staff outflow;Empolyees;
+70;FT_aantal_instroom_duur_delta;B;Change staff inflow (top management);Empolyees;
+71;FT_aantal_uitstroom_duur_delta;B;Change staff outflow (top management);Empolyees;
+72;FT_aantal_fte_duur_delta;B;Change number of FTE (top management);Empolyees;
+73;FT_aantal_beleid_delta;B;Change number of FTE (policy makers);Empolyees;
+74;FT_aantal_ondersteuning_delta;B;Change number of FTE (staff);Empolyees;
+75;FT_aantal_uitvoering_delta;B;Change number of FTE (execution);Empolyees;
+76;FT_aantal_inspectie_delta;B;Change number of FTE (inspection);Empolyees;
+77;FT_percentage_mannen_delta;B;Change percentage males;Empolyees;
+78;FT_percentage_jonginstroom_uitstroom_delta;B;Change percentage FTE infow/outlfow (young);Empolyees;
+79;FT_percentage_doorstroom_duur_delta;B;Change percentage FTE infow/outlfow (top management);Empolyees;
+80;FT_percentage_uitvoering_delta;B;Chang percentage FTE (execution);Empolyees;
+81;FT_percentage_beleid_delta;B;Change percentage FTE (policy);Empolyees;
+82;FT_percentage_ondersteuning_delta;B;Change percentage FTE (staff);Empolyees;
+83;FT_staffel_hfst_value_delta;B;Change budget total (chapter) ;Financial;No FT
+84;FT_materiality_BC_hfst_delta;B;Change materiality (chapter);Financial;No FT
+85;FT_staffel_hfst_cat_delta;B;Change materiality size category (chapter);Financial;No FT
+86;FT_overschrijding_materiality_BC_hfst_delta;B;Change materiality overrun (chapter);Financial;No FT
+87;FT_materiality_BC_art_delta;B;Change materiality (article);Financial;No FT
+88;FT_materiality_BC_art_staffel_cat_delta;B;Change materiality size category (article);Financial;No FT
+89;FT_overschrijding_materiality_BC_art_delta;B;Change materiality overrun (article);Financial;No FT
+90;FT_aantal_ontvangers_delta;B;Change number of subsidy recipients;Non-financial;
+91;FT_totaal_ontvangers_delta;B;Change amount of subsidy recipients;Non-financial;
+92;FT_aantal_verlagingen_delta;B;Change number of amendments - decrease;Political;
+93;FT_aantal_verhogingen_delta;B;Change number of amendments - increase;Political;
+94;FT_totaal_amendement_delta;B;Change number of amendments;Political;
+95;FT_aantal_handmatigeboekingen_delta;B;Change number of manual journal entries;Non-financial;
+96;FT_slotwet_delta;B;Budget closing act movements;Non-financial;
+97;FT_app_vs_programma_delta;B;Overhead expenses vs policy expenses;Non-financial;

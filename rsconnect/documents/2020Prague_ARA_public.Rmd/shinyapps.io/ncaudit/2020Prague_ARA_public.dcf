@@ -1,0 +1,12 @@
+name: 2020Prague_ARA_public
+title: 2020Prague_ARA_public
+username:
+account: ncaudit
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1924494
+bundleId: 2864931
+url: https://ncaudit.shinyapps.io/2020Prague_ARA_public/
+when: 1583774599.20034
+asMultiple: FALSE
+asStatic: FALSE
